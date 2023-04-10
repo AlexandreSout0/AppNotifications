@@ -1,74 +1,70 @@
 package com.example.appnotifications
 
-import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.TaskStackBuilder
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Color
-import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
+import androidx.work.*
 import com.example.appnotifications.databinding.ActivityMainBinding
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
-
-    lateinit var binding: ActivityMainBinding
-
-    val CHANNEL_ID = "channelID"
-    val CHANNEL_NAME = "channelName"
-    val NOTIF_ID = 0
+    private lateinit var binding: ActivityMainBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        createNotifChannel()
-
-        val intent= Intent(this,MainActivity::class.java)
-        val pendingIntent = TaskStackBuilder.create(this).run {
-            addNextIntentWithParentStack(intent)
-            getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT)
-        }
-
-        val notif = NotificationCompat.Builder(this,CHANNEL_ID)
-            .setContentTitle("Sample Title")
-            .setContentText("This is sample body notif")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .build()
-
-
-        val notifManger = NotificationManagerCompat.from(this)
-
-
-        binding.btnShowNotif.setOnClickListener {
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-
+        binding.apply {
+            btnShowNotif.setOnClickListener {
+                myOneTimeWork()
             }
-            notifManger.notify(NOTIF_ID, notif)
+            btnShowNotifInterval.setOnClickListener {
+                myPeriodicWork()
+            }
         }
     }
 
-    private fun createNotifChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
-                lightColor = Color.BLUE
-                enableLights(true)
-            }
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
+    private fun myPeriodicWork() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .build()
+
+        val myRequest = PeriodicWorkRequest.Builder(
+            MyWorker::class.java,
+            15,
+            TimeUnit.MINUTES
+        ).setConstraints(constraints)
+            .addTag("my_id")
+            .build()
+
+        //minimum interval is 15min, just wait 15 min,
+        // I will cut this.. to show you
+        //quickly
+
+        //now is 0:15 let's wait until 0:30min
+
+        WorkManager.getInstance(this)
+            .enqueueUniquePeriodicWork(
+                "my_id",
+                ExistingPeriodicWorkPolicy.KEEP,
+                myRequest
+            )
+    }
+
+
+    private fun myOneTimeWork() {
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .setRequiresCharging(false)
+            .build()
+
+
+        val myWorkRequest: WorkRequest = OneTimeWorkRequest.Builder(MyWorker::class.java)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueue(myWorkRequest)
+
     }
 }
